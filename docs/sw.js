@@ -1,5 +1,5 @@
 // Service worker: precache everything for full offline play.
-const CACHE = 'factory-40cf3601c62a';
+const CACHE = 'factory-72737efd874e';
 const FILES = ["./","./fonts/fonts.css","./fonts/titillium-400.woff2","./fonts/titillium-600.woff2","./fonts/titillium-700.woff2","./game.js","./icons/icon-120.png","./icons/icon-152.png","./icons/icon-180.png","./icons/icon-192.png","./icons/icon-32.png","./icons/icon-512.png","./icons/icon-64.png","./icons/icon-maskable-512.png","./index.html","./manifest.webmanifest","./style.css"];
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES)).then(() => self.skipWaiting()));

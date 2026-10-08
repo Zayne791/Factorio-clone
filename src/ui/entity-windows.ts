@@ -30,6 +30,7 @@ export class EntityWindow extends Win {
     this.panel = h('div', 'panel col', row);
     this.panel.style.minWidth = '330px';
     this.build();
+    try { ui.g.circuits?.buildCircuitGUI?.(this, this.panel, e); } catch (err) { console.warn(err); }
   }
   insertIntoEntity(s: Stack): number { return this.entity.insertItem(s.id, s.n, 'player'); }
   toPlayer = () => ({ insert: (s: Stack) => this.ui.g.player.main.insertStack(s) });
@@ -142,12 +143,12 @@ export class EntityWindow extends Win {
     if (e instanceof Accumulator) { this.status(P); this.progress(P, () => e.stored / e.cap, () => `${(e.stored / 1e6).toFixed(2)} / 5 MJ`, 'blue'); return; }
     if (e instanceof SolarPanel) { const t = h('div', 'label', P); this.updaters.push(() => t.textContent = `Output: ${fmtPower(60e3 * this.ui.g.daylight)} (daylight ${Math.round(this.ui.g.daylight * 100)}%)`); return; }
     if (e instanceof Splitter) return this.buildSplitter(e);
+    if ((e as any).buildGUI) { (e as any).buildGUI(this, P); return; }
     if ((e as any).fluidBoxes) {
       const row = h('div', 'row', P);
       for (const b of (e as any).fluidBoxes as FluidBox[]) this.fluidBar(row, () => b, b.kind);
       return;
     }
-    if ((e as any).buildGUI) { (e as any).buildGUI(this, P); return; }
     for (const d of e.description()) h('div', 'label', P, d);
     const inv = e.inventories();
     for (const i of inv) this.invGrid(P, () => i, 10);
@@ -354,7 +355,6 @@ export class EntityWindow extends Win {
       const t = h('b', '', row);
       this.updaters.push(() => t.textContent = String(e.handSize));
     }
-    if ((this.ui.g.circuits as any)?.buildCircuitGUI) (this.ui.g.circuits as any).buildCircuitGUI(this, P, e);
   }
   buildSplitter(e: Splitter) {
     const P = this.panel, ui = this.ui;

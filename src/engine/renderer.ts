@@ -151,27 +151,32 @@ void main() {
   vec2 warp = (vec2(N(p*0.045, 0), N(p*0.045+0.37, 1)) - 0.5) * 0.9;
   vec2 q = p + warp - 0.5;
   vec2 ci = floor(q); vec2 f = fract(q);
-  uint ts[4]; float ws[4];
-  ts[0] = tileAt(ci + vec2(0.5, 0.5)); ts[1] = tileAt(ci + vec2(1.5, 0.5));
-  ts[2] = tileAt(ci + vec2(0.5, 1.5)); ts[3] = tileAt(ci + vec2(1.5, 1.5));
-  vec2 sf = f * f * (3.0 - 2.0 * f);
-  ws[0] = (1.0-sf.x)*(1.0-sf.y); ws[1] = sf.x*(1.0-sf.y); ws[2] = (1.0-sf.x)*sf.y; ws[3] = sf.x*sf.y;
-  // player tiles & void don't take part in natural blending
-  for (int i = 0; i < 4; i++) if (isPlayer(ts[i]) || ts[i] == 0u) ts[i] = t0;
-  // accumulate per distinct tile with noisy boundary
-  float nA = (N(p*0.55, 1) - 0.5) * 0.55 + (N(p*1.9, 2) - 0.5) * 0.22 + (N(p*5.3, 3) - 0.5) * 0.08;
-  uint best = ts[0]; float bw = -1.0; float second = -1.0;
+  // cubic B-spline weights over a 4x4 tile neighbourhood: removes tile-grid staircase artifacts
+  vec4 wx, wy;
+  { vec2 f2 = f*f, f3 = f2*f, g = 1.0 - f;
+    vec2 a0 = g*g*g/6.0, a1 = (3.0*f3 - 6.0*f2 + 4.0)/6.0, a2 = (-3.0*f3 + 3.0*f2 + 3.0*f + 1.0)/6.0, a3 = f3/6.0;
+    wx = vec4(a0.x, a1.x, a2.x, a3.x); wy = vec4(a0.y, a1.y, a2.y, a3.y); }
+  uint ut[6]; float uw[6]; int nu = 0;
   float waterW = 0.0, landW = 0.0;
-  vec3 blend = vec3(0.0); float bsum = 0.0;
-  for (int i = 0; i < 4; i++) {
-    uint t = ts[i];
-    float w = 0.0;
-    for (int j = 0; j < 4; j++) if (ts[j] == t) w += ws[j];
+  for (int j = 0; j < 4; j++) for (int i = 0; i < 4; i++) {
+    uint t = tileAt(ci + vec2(float(i) - 0.5, float(j) - 0.5));
+    if (isPlayer(t) || t == 0u) t = t0;
+    float w = wx[i] * wy[j];
+    if (isWater(t)) waterW += w; else landW += w;
+    bool found = false;
+    for (int u = 0; u < 6; u++) { if (u >= nu) break; if (ut[u] == t) { uw[u] += w; found = true; break; } }
+    if (!found && nu < 6) { ut[nu] = t; uw[nu] = w; nu++; }
+  }
+  float nA = (N(p*0.55, 1) - 0.5) * 0.55 + (N(p*1.9, 2) - 0.5) * 0.22 + (N(p*5.3, 3) - 0.5) * 0.08;
+  uint best = ut[0]; float bw = -9.0; float second = -9.0; uint rt = ut[0];
+  for (int u = 0; u < 6; u++) {
+    if (u >= nu) break;
+    uint t = ut[u];
     float ft = float(t);
-    float jitter = (N(p * 0.42 + vec2(ft * 0.137, ft * 0.291), 1) - 0.5) * 0.75 + (N(p * 1.6 + vec2(ft * 0.53, ft * 0.17), 2) - 0.5) * 0.3 + (N(p * 4.1 + ft * 0.31, 3) - 0.5) * 0.1;
-    float wn = w + jitter;
-    if (isWater(t)) { waterW = max(waterW, w); wn -= 0.06; } else landW = max(landW, w);
-    if (wn > bw) { second = bw; bw = wn; best = t; } else if (wn > second) second = wn;
+    float jitter = (N(p * 0.42 + vec2(ft * 0.137, ft * 0.291), 1) - 0.5) * 0.55 + (N(p * 1.6 + vec2(ft * 0.53, ft * 0.17), 2) - 0.5) * 0.22 + (N(p * 4.1 + ft * 0.31, 3) - 0.5) * 0.07;
+    float wn = uw[u] + jitter;
+    if (isWater(t)) wn -= 0.04;
+    if (wn > bw) { second = bw; rt = best; bw = wn; best = t; } else if (wn > second) { second = wn; rt = t; }
   }
   vec3 col;
   if (isWater(best)) {
@@ -196,12 +201,7 @@ void main() {
     vec3 cb = natural(best, p);
     col = cb;
     float edge = clamp((bw - second) * 3.0, 0.0, 1.0);
-    if (edge < 1.0) {
-      // find the runner-up tile
-      uint rt = best; float rw = -1.0;
-      for (int i = 0; i < 4; i++) { uint t = ts[i]; if (t == best || isWater(t)) continue; float w = 0.0; for (int j = 0; j < 4; j++) if (ts[j] == t) w += ws[j]; if (w > rw) { rw = w; rt = t; } }
-      if (rt != best) col = mix(natural(rt, p), cb, 0.5 + 0.5 * edge);
-    }
+    if (edge < 1.0 && rt != best && !isWater(rt)) col = mix(natural(rt, p), cb, 0.5 + 0.5 * edge);
     // wet, darker ground near water
     if (waterW > 0.0) col *= 1.0 - smoothstep(0.0, 0.5, waterW) * 0.3;
   }

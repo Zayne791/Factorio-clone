@@ -440,6 +440,25 @@ export class UI {
         this.qbSlots.push(s);
       }
     }
+    // shortcut bar (Factorio 2.0: blueprint tools are shortcuts, not crafted items)
+    const sb = h('div', 'hud-el', R); sb.id = 'shortcuts'; this.hud.shortcuts = sb;
+    const sc = (icon: string | null, glyph: string, tip: string, fn: () => void) => {
+      const b = h('div', 'sbtn', sb);
+      if (icon) this.icon(icon, 26, b); else h('b', '', b, glyph);
+      b.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); fn(); });
+      b.addEventListener('pointerenter', e => { if (e.pointerType !== 'touch') this.showTooltip(`<div class="tt-title">${tip}</div>`, b); });
+      b.addEventListener('pointerleave', () => this.hideTooltip(b));
+      return b;
+    };
+    sc('blueprint', '', 'New blueprint (Ctrl+B)', () => this.g.logistics?.startTool('blueprint'));
+    sc('deconstruction-planner', '', 'Deconstruction planner (Shift-drag cancels)', () => this.g.logistics?.startTool('deconstruction-planner'));
+    sc('upgrade-planner', '', 'Upgrade planner', () => this.g.logistics?.startTool('upgrade-planner'));
+    sc(null, '⎘', 'Copy (Ctrl+C)', () => this.g.logistics?.startTool('copy'));
+    sc(null, '✂', 'Cut (Ctrl+X)', () => this.g.logistics?.startTool('cut'));
+    sc(null, '⎗', 'Paste (Ctrl+V)', () => this.g.logistics?.paste());
+    sc('red-wire', '', 'Red wire', () => { this.g.player.clearCursor(); this.g.player.cursor = { id: 'red-wire', n: 1, data: { temp: true } }; });
+    sc('green-wire', '', 'Green wire', () => { this.g.player.clearCursor(); this.g.player.cursor = { id: 'green-wire', n: 1, data: { temp: true } }; });
+    const prb = sc('personal-roboport-equipment', '', 'Toggle personal roboport', () => { const l = this.g.logistics; if (l) { l.personalOn = !l.personalOn; prb.classList.toggle('off', !l.personalOn); } });
     // weapons
     const wp = h('div', 'hud-el', R); wp.id = 'weapons'; this.hud.weapons = wp;
     for (let i = 0; i < 3; i++) {
@@ -477,6 +496,7 @@ export class UI {
     btn('Pick up', '✋', () => { }, d => this.input.pickingUp = d);
     btn('Shoot', '✦', () => { }, d => this.shootHeld = d);
     btn('Clear', '✕', () => this.g.player.clearCursor());
+    btn('Drive', '⛟', () => this.toggleVehicle());
     this.hud.touch = tc;
     const tl = h('div', 'hud-el', R); tl.id = 'touch-left';
     const lb = (label: string, glyph: string, fn: () => void) => { const b = h('div', 'tbtn', tl); b.innerHTML = `<b>${glyph}</b>${label}`; b.addEventListener('pointerdown', e => { e.stopPropagation(); e.preventDefault(); fn(); }); return b; };
@@ -746,7 +766,7 @@ export class UI {
   }
   toggleVehicle() { this.g.combat?.toggleVehicle?.(); }
   driveVehicle(mx: number, my: number) { this.g.combat?.drive?.(mx, my); }
-  paste() { }
+  paste() { this.g.logistics?.paste(); }
   showVictory() { }
   placeBlueprint(x: number, y: number) { this.g.logistics?.placeBlueprint?.(x, y); }
 }
@@ -756,7 +776,7 @@ export function statusText(s: string): string {
     'working': 'Working', 'no-recipe': 'No recipe', 'no-ingredients': 'Item ingredient shortage', 'output-full': 'Output full', 'no-power': 'No power',
     'low-power': 'Low power', 'no-fuel': 'No fuel', 'waiting-source': 'Waiting for source items', 'waiting-target': 'Waiting for space in destination',
     'no-resources': 'No minable resources', 'no-research': 'No research in progress', 'missing-packs': 'Missing science packs', 'no-water': 'No input fluid',
-    'disabled': 'Disabled by control behavior', 'no-fluid': 'Fluid ingredient shortage', 'waiting-payload': 'Waiting for payload', 'ready': 'Ready to launch', 'no-ammo': 'No ammo',
+    'disabled': 'Disabled by control behavior', 'no-fluid': 'Fluid ingredient shortage', 'waiting-payload': 'Waiting for payload', 'ready': 'Ready to launch', 'no-ammo': 'No ammo', 'idle': 'Waiting for targets', 'low-temperature': 'Low temperature', 'charging': 'Charging', 'waiting-for-train': 'Waiting for train', 'no-network': 'Not part of a logistic network', 'no-construction': 'Waiting for construction robots',
   };
   return m[s] || s;
 }

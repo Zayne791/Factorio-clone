@@ -6,6 +6,12 @@ import './sim/power';
 import './sim/crafting';
 import './sim/mining';
 import './sim/simple';
+import './sim/military';
+import { HeatSystem } from './sim/heat';
+import { LogisticSystem } from './sim/logistics';
+import { CircuitSystem } from './sim/circuits';
+import { EnemySystem } from './sim/enemies';
+import { CombatSystem } from './sim/military';
 import { Renderer } from './engine/renderer';
 import { buildArt, IconSheet } from './art';
 import { Game } from './game';
@@ -22,6 +28,7 @@ import { StatsWindow } from './ui/stats-window';
 import { DEFAULT_SETTINGS, MapSettings } from './world/mapgen';
 import { Menu } from './ui/menu';
 import { installExtras } from './extras';
+import { ArmorGridWindow, ItemPicker } from './ui/extra-windows';
 
 const loading = document.getElementById('loading')!;
 const loadBar = document.getElementById('load-bar') as HTMLDivElement;
@@ -65,6 +72,11 @@ function resize() {
 function setupGame(game: Game) {
   const fx = new Effects();
   game.fx = fx as any;
+  game.enemies = new EnemySystem();
+  game.combat = new CombatSystem();
+  game.heat = new HeatSystem();
+  game.logistics = new LogisticSystem();
+  game.circuits = new CircuitSystem();
   const input = new Input(game, renderer, renderer.canvas);
   const ui = new UI(game, input, renderer, sheets.icons, sheets.techs);
   const wr = new WorldRenderer(renderer, game);
@@ -74,6 +86,8 @@ function setupGame(game: Game) {
   ui.openMap = () => new MapWindow(ui);
   ui.openStats = () => new StatsWindow(ui);
   ui.openMenu = () => menu.showPause();
+  (ui as any).openArmorGrid = () => ui.toggleWindow('armor', () => new ArmorGridWindow(ui));
+  (ui as any).pickItem = (cb: (id: string) => void, opts: any = {}) => { const w = new ItemPicker(ui, cb, opts); ui.openWindow(w); };
   game.research.onComplete = (id, lvl) => {
     ui.showMessage(`Research completed: ${(require_tech(id))}${lvl > 1 ? ' ' + lvl : ''}`);
     game.sound.play('research-complete', 0.8);

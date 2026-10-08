@@ -75,14 +75,15 @@ export class Input {
       case 'KeyQ': this.pipette(); break;
       case 'KeyZ': this.dropCursor(); break;
       case 'KeyF': this.pickingUp = true; break;
-      case 'Space': case 'KeyC': if (!ctrl) this.shooting = true; else if (e.code === 'KeyC') this.copyHovered(); break;
+      case 'Space': case 'KeyC': if (!ctrl) this.shooting = true; else if (e.code === 'KeyC') g.logistics?.startTool('copy'); break;
       case 'AltLeft': case 'AltRight': this.alt = !this.alt; e.preventDefault(); break;
       case 'Tab': p.selectedGun = (p.selectedGun + 1) % 3; e.preventDefault(); break;
       case 'Enter': g.ui?.toggleVehicle?.(); break;
       case 'Equal': case 'NumpadAdd': this.zoom(1.25); break;
       case 'Minus': case 'NumpadSubtract': this.zoom(0.8); break;
       case 'KeyV': if (ctrl) g.ui?.paste?.(); break;
-      case 'KeyX': if (!ctrl) g.ui?.swapQuickbarRows?.(); break;
+      case 'KeyX': if (!ctrl) g.ui?.swapQuickbarRows?.(); else g.logistics?.startTool('cut'); break;
+      case 'KeyB': if (ctrl) g.logistics?.startTool('blueprint'); break;
     }
     if (e.code.startsWith('Digit')) {
       let n = parseInt(e.code.slice(5), 10);
@@ -153,7 +154,7 @@ export class Input {
     }
     this.mx = x; this.my = y; this.hasPointer = true; this.updateWorldPos();
     if (type === 'mouse') {
-      if (e.button === 2) { this.mining = true; return; }
+      if (e.button === 2) { if (e.shiftKey) { this.copyHovered(); return; } this.mining = true; return; }
       if (e.button === 0) { this.leftDown = true; this.onPrimaryDown(e.shiftKey, e.ctrlKey || e.metaKey); }
       if (e.button === 1) { this.pipette(); }
       return;
@@ -235,9 +236,10 @@ export class Input {
     const g = this.g, p = g.player;
     if (p.dead) return;
     const item = p.cursorItem();
+    if (item === 'blueprint' && p.cursor?.data?.bp) { g.logistics?.placeBlueprint(this.wx, this.wy); return; }
     const tool = item && ITEMS[item]?.tool;
     if (tool && (item === 'deconstruction-planner' || item === 'blueprint' || item === 'upgrade-planner')) {
-      this.sel = { x0: this.wx, y0: this.wy, mode: item === 'deconstruction-planner' ? 'decon' : item === 'blueprint' ? 'blueprint' : 'upgrade' };
+      this.sel = { x0: this.wx, y0: this.wy, mode: item === 'deconstruction-planner' ? 'decon' : item === 'blueprint' ? (p.cursor?.data?.mode || 'blueprint') : 'upgrade' };
       return;
     }
     if (item === 'red-wire' || item === 'green-wire') { g.ui?.wireClick(this.view.hover, item === 'red-wire' ? 'red' : 'green'); return; }
@@ -296,6 +298,7 @@ export class Input {
       const x = Math.floor(this.wx) + 0.5, y = Math.floor(this.wy) + 0.5;
       return { tileItem: item, x: size % 2 ? x : Math.round(this.wx), y: size % 2 ? y : Math.round(this.wy), dir: 0, valid: true, size };
     }
+    if (item === 'blueprint' && p.cursor?.data?.bp) return (this.g.logistics?.blueprintPreview(this.wx, this.wy, this.buildDir) as any) || null;
     if (!it.place) return null;
     const proto = it.place;
     if (proto === 'straight-rail') return this.g.rails?.preview(this.wx, this.wy, this.buildDir) || null;

@@ -201,7 +201,7 @@ export class MapGen {
     const dist = Math.hypot(centerX, centerY);
     const startR = 260 * this.s.startArea;
     if (dist < startR) return;
-    const chance = Math.min(0.55, 0.22 + (dist - startR) / 2500) * this.s.enemyFreq;
+    const chance = Math.min(0.65, 0.3 + (dist - startR) / 2000) * this.s.enemyFreq;
     if (r.next() > chance) return;
     if (Math.floor(centerX / CHUNK) !== cx || Math.floor(centerY / CHUNK) !== cy) return;
     const lx = Math.floor(centerX - cx * CHUNK), ly = Math.floor(centerY - cy * CHUNK);

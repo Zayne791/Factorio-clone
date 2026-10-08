@@ -127,6 +127,7 @@ export class Game {
         this.enemies?.spawnBase(g);
       }
     }
+    this.enemies?.retryPending();
   }
 
   chart(cx: number, cy: number) {
@@ -146,11 +147,13 @@ export class Game {
   removeEntity(e: Entity) {
     if (e.dead) return;
     e.dead = true;
-    this.world.removeEntity(e);
+    if ((e as any).isUnit) this.world.removeUnit(e); else this.world.removeEntity(e);
     e.onRemoved();
     this.removedPending = true;
     this.notifyNeighbours(e);
     this.entityCountVersion++;
+    this.logistics?.onEntityRemoved?.(e);
+    this.circuits?.onEntityRemoved?.(e);
     this.ui?.onEntityRemoved?.(e);
   }
   notifyNeighbours(e: Entity) {
@@ -163,14 +166,16 @@ export class Game {
   }
 
   // Place entity from an item (player or robot). Returns entity or error string.
-  buildEntity(protoId: string, x: number, y: number, dir: Dir, opts: { fromPlayer?: boolean; ghost?: boolean; flags?: number; noFluidCheck?: boolean } = {}): Entity | string {
+  buildEntity(protoId: string, x: number, y: number, dir: Dir, opts: { fromPlayer?: boolean; ghost?: boolean; flags?: number; noFluidCheck?: boolean; returnOld?: (id: string, n: number) => void } = {}): Entity | string {
     const chk = this.world.canPlace(protoId, x, y, dir, { ghost: opts.ghost });
     if (!chk.ok) return chk.reason || 'Cannot build here';
     const p = ENTITIES[protoId];
     // fast replace
     let replaced: Entity | null = null;
+    let ghostSettings: any = null;
+    const giveOld = opts.returnOld || ((id: string, n: number) => { this.player.give(id, n); });
     for (const o of chk.replace || []) {
-      if (o.type === 'ghost') { this.removeEntity(o); continue; }
+      if (o.type === 'ghost') { if ((o as any).target === protoId) ghostSettings = (o as any).settings; this.removeEntity(o); continue; }
       if (o.type === 'item-on-ground') { this.removeEntity(o); this.player.give((o as ItemOnGround).item, 1); continue; }
       if (o.name === protoId && o.dir === dir && o.x === x && o.y === y) return 'Already built';
       replaced = o;
@@ -187,14 +192,15 @@ export class Game {
       const state = replaced.serialize();
       const contents = replaced.contents();
       this.removeEntity(replaced);
-      if (replaced.name !== protoId && replaced.proto.item) this.player.give(replaced.proto.item, 1);
+      if (replaced.name !== protoId && replaced.proto.item) giveOld(replaced.proto.item, 1);
       this.addEntity(e);
       try {
         if (replaced.type === e.type) e.load(state);
-        else for (const s of contents) { const n = e.insertItem(s.id, s.n, 'player'); if (n < s.n) this.player.give(s.id, s.n - n); }
+        else for (const s of contents) { const n = e.insertItem(s.id, s.n, 'player'); if (n < s.n) giveOld(s.id, s.n - n); }
       } catch { /* ignore */ }
       if (e instanceof BeltBase && replaced instanceof BeltBase) { /* lanes kept via load */ }
     } else this.addEntity(e);
+    if (ghostSettings) this.logistics?.applySettings?.(e, ghostSettings);
     if (e.type === 'underground-belt') this.autoUndergroundKind(e as any);
     this.sound.play('build', 0.6, x, y);
     return e;
@@ -317,6 +323,7 @@ export class Game {
     if (e.dead) return;
     if (e instanceof Character) { this.player.die(); return; }
     if (this.enemies?.isEnemy(e)) { this.enemies.onDeath(e, source); return; }
+    if (e.type === 'tree') { this.fx?.smoke(e.x, e.y - 0.5, 1); this.removeEntity(e); return; }
     const size = Math.max(e.w, e.h);
     this.fx?.explosion(e.x, e.y, Math.min(3, 0.6 + size * 0.4));
     this.sound.play('explosion', 0.8, e.x, e.y);

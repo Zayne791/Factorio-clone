@@ -688,6 +688,16 @@ export function buildOverlays() {
     ctx.fillStyle = '#ffd02a'; ctx.font = 'bold 34px sans-serif'; ctx.textAlign = 'center'; ctx.fillText('?', 32, 45);
   });
   icon('warn-destroyed', ctx => { ctx.fillStyle = '#ff3a2a'; poly(ctx, [[32, 6], [60, 56], [4, 56]]); ctx.fill(); ctx.fillStyle = '#fff'; ctx.font = 'bold 30px sans-serif'; ctx.textAlign = 'center'; ctx.fillText('!', 32, 52); });
+  icon('decon-mark', ctx => {
+    ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.beginPath(); ctx.arc(32, 32, 26, 0, 6.3); ctx.fill();
+    ctx.strokeStyle = '#ff3a2a'; ctx.lineWidth = 9; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(18, 18); ctx.lineTo(46, 46); ctx.moveTo(46, 18); ctx.lineTo(18, 46); ctx.stroke();
+  });
+  icon('upgrade-mark', ctx => {
+    ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.beginPath(); ctx.arc(32, 32, 26, 0, 6.3); ctx.fill();
+    ctx.fillStyle = '#5adc3a'; poly(ctx, [[32, 10], [52, 32], [40, 32], [40, 52], [24, 52], [24, 32], [12, 32]]); ctx.fill();
+    ctx.strokeStyle = 'rgba(0,0,0,0.6)'; ctx.lineWidth = 2; ctx.stroke();
+  });
   // ghost hatching / range tile
   const [rt, r] = mkc(16, 16); r.fillStyle = '#fff'; r.fillRect(0, 0, 16, 16); addRaw('tile-fill', rt);
   const [cc2, c2] = mkc(64, 64); c2.strokeStyle = '#fff'; c2.lineWidth = 2; c2.setLineDash([6, 6]); c2.strokeRect(2, 2, 60, 60); addRaw('dashed-box', cc2);

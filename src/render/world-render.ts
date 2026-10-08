@@ -108,7 +108,8 @@ export class WorldRenderer {
     for (const e of ents) {
       e.draw(r, alt);
       if (e.warnIcon && blink && e.isBuilding) r.draw('overlay', a.get(e.warnIcon), e.x, e.y, WHITE, 0, 0.6);
-      if (e.decon) r.draw('overlay', a.get('warn-destroyed'), e.x, e.y, rgba(1, 0.3, 0.3, 0.8), 0, 0.5);
+      if (e.decon) { r.drawRect('overlay', a.get('white'), e.x, e.y, Math.max(0.6, e.w), Math.max(0.6, e.h), rgba(1, 0.15, 0.1, 0.18)); r.draw('overlay', a.get('decon-mark'), e.x, e.y, WHITE, 0, Math.min(0.9, Math.max(e.w, e.h) * 0.5)); }
+      if ((e as any).upgradeTo) r.draw('overlay', a.get('upgrade-mark'), e.x, e.y, WHITE, 0, Math.min(0.9, Math.max(e.w, e.h) * 0.5));
       if (e.health < e.maxHealth && e.isBuilding && (g.tick - e.lastHit < 600 || view.hover === e)) this.healthBar(e);
     }
     for (const u of w.units) {
@@ -118,6 +119,8 @@ export class WorldRenderer {
     g.rails?.draw(r, x0, y0, x1, y1);
     // wires
     this.drawWires(ents);
+    g.circuits?.draw(r, x0, y0, x1, y1);
+    g.combat?.draw(r);
     g.fx?.draw(r);
     // player light (flashlight)
     const ch = g.player.character;
@@ -128,6 +131,7 @@ export class WorldRenderer {
     }
     // ---- overlays ----
     if (view.showSupply) this.drawSupplyAreas(x0, y0, x1, y1);
+    { const ci = g.player.cursorItem(); if (ci && (ci === 'roboport' || ENTITIES[ITEMS[ci]?.place || '']?.logistic || ci.endsWith('-robot'))) g.logistics?.drawAreas(r, x0, y0, x1, y1); }
     if (view.hover && view.hover.selectable) this.selectionBox(view.hover);
     if (view.preview) this.drawPreview(view.preview);
     if (view.selRect) {
@@ -196,17 +200,6 @@ export class WorldRenderer {
           drawCat(ax, ay, bx, by, LANE_COLORS.copper);
         }
       }
-      if (e.wires) {
-        for (const color of ['red', 'green'] as const) {
-          for (const o of e.wires[color]) {
-            const k = color + (e.id < o.id ? e.id + ':' + o.id : o.id + ':' + e.id);
-            if (seen.has(k)) continue;
-            seen.add(k);
-            const [ax, ay] = wirePointOf(e, color), [bx, by] = wirePointOf(o, color);
-            drawCat(ax, ay, bx, by, LANE_COLORS[color]);
-          }
-        }
-      }
     }
   }
 
@@ -234,7 +227,7 @@ export class WorldRenderer {
       e.x = it.x; e.y = it.y;
       if ((e as any).updatePositions) (e as any).updatePositions();
       r.redirect = 'top';
-      r.tint = (p as any).ghost ? rgba(0.55, 0.75, 1, 0.55) : it.valid ? rgba(0.55, 1, 0.55, 0.62) : rgba(1, 0.35, 0.3, 0.62);
+      r.tint = !it.valid ? rgba(1, 0.35, 0.3, 0.62) : (p as any).ghost ? rgba(0.55, 0.75, 1, 0.55) : rgba(0.55, 1, 0.55, 0.62);
       try { e.draw(r, true); } catch { /* preview drawing best-effort */ }
       r.redirect = null;
       // footprint

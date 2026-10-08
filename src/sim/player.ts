@@ -162,6 +162,7 @@ export class Player {
     if (s) { this.cursor = s; this.main.slots[slot] = null; this.cursorFrom = slot; this.main.changed(); }
   }
   clearCursor() {
+    if (this.cursor?.data?.temp) this.cursor = null;
     if (this.cursor) {
       const c = this.cursor; this.cursor = null;
       if (this.cursorFrom >= 0 && !this.main.slots[this.cursorFrom]) { this.main.slots[this.cursorFrom] = c; this.main.changed(); }
