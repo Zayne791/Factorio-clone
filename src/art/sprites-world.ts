@@ -585,6 +585,68 @@ export function buildRailParts() {
   b.fillStyle = '#5a5650'; b.fillRect(0, 0, 32, 32);
   for (let i = 0; i < 120; i++) { b.fillStyle = `rgba(${140 + R.next() * 60 | 0},${130 + R.next() * 50 | 0},${110 + R.next() * 40 | 0},0.7)`; b.fillRect(R.next() * 32, R.next() * 32, 2, 2); }
   addRaw('rail-bed', bc);
+  // ---- rail track parts drawn along rail centerlines by RailSystem (sim/rails.ts) ----
+  // ballast band: 0.5 tile along (x, tileable) by 2.75 tiles across (y), soft edges across
+  {
+    const W = 32, H = 176;
+    const [c, ctx] = mkc(W, H);
+    const RB = new RNG(311);
+    const img = ctx.createImageData(W, H);
+    const d = img.data;
+    // fine gravel noise, tileable along x
+    for (let y = 0; y < H; y++) {
+      const v = Math.abs(y + 0.5 - H / 2) / (H / 2);           // 0 centre .. 1 edge
+      const a = v < 0.66 ? 1 : Math.max(0, 1 - (v - 0.66) / 0.34);
+      const edge = Math.min(1, Math.max(0, (v - 0.45) / 0.4));
+      for (let x = 0; x < W; x++) {
+        const n = RB.next();
+        const k = 0.86 + n * 0.28 - edge * 0.12;
+        const i = (y * W + x) * 4;
+        d[i] = 118 * k; d[i + 1] = 110 * k; d[i + 2] = 98 * k; d[i + 3] = 255 * a * a * (3 - 2 * a);
+      }
+    }
+    ctx.putImageData(img, 0, 0);
+    // pebbles (wrapped along x so consecutive quads tile)
+    ctx.globalCompositeOperation = 'source-atop';
+    for (let i = 0; i < 150; i++) {
+      const x = RB.next() * W, y = H * 0.12 + RB.next() * H * 0.76, r = 1 + RB.next() * 2.2;
+      const l = 70 + RB.next() * 90 | 0;
+      ctx.fillStyle = `rgba(${l + 12},${l + 6},${l - 4},0.85)`;
+      for (const ox of [-W, 0, W]) { ctx.beginPath(); ctx.ellipse(x + ox, y, r, r * 0.8, RB.next() * 3, 0, 6.3); ctx.fill(); }
+    }
+    ctx.globalCompositeOperation = 'source-over';
+    addRaw('rail-ballast', c);
+  }
+  // wooden sleeper: 1.6 x 0.25 tiles
+  {
+    const [c, ctx] = mkc(104, 18);
+    ctx.fillStyle = vgrad(ctx, 1, 17, [[0, '#7a6048'], [0.45, '#5c4430'], [1, '#33251a']]);
+    rrect(ctx, 1, 1, 102, 16, 3); ctx.fill();
+    const RG = new RNG(91);
+    ctx.strokeStyle = 'rgba(30,20,12,0.35)'; ctx.lineWidth = 1;
+    for (let i = 0; i < 4; i++) { const y = 4 + RG.next() * 10; ctx.beginPath(); ctx.moveTo(4, y); ctx.bezierCurveTo(30, y + RG.range(-2, 2), 70, y + RG.range(-2, 2), 100, y); ctx.stroke(); }
+    ctx.strokeStyle = 'rgba(0,0,0,0.55)'; rrect(ctx, 1, 1, 102, 16, 3); ctx.stroke();
+    // tie plates under the rails
+    ctx.fillStyle = '#3a3836';
+    for (const x of [20, 74]) { ctx.fillRect(x, 2, 10, 14); }
+    ctx.fillStyle = 'rgba(160,160,150,0.5)';
+    for (const x of [20, 74]) { ctx.fillRect(x + 1, 3, 2, 2); ctx.fillRect(x + 7, 13, 2, 2); }
+    addRaw('rail-tie2', c);
+  }
+  // steel rail cross-section (x along the rail, y across): dark flanks, polished head
+  {
+    const [c, ctx] = mkc(16, 10);
+    ctx.fillStyle = vgrad(ctx, 0, 10, [[0, '#2c2e2e'], [0.2, '#80868a'], [0.42, '#eef2f2'], [0.62, '#a8aeb0'], [0.85, '#4a4e50'], [1, '#222424']]);
+    ctx.fillRect(0, 0, 16, 10);
+    addRaw('rail-steel2', c);
+  }
+  // signal lamp
+  {
+    const [c, ctx] = mkc(20, 20);
+    ctx.fillStyle = rgrad(ctx, 9, 8, 0, 10, [[0, 'rgba(255,255,255,1)'], [0.45, 'rgba(235,235,235,1)'], [0.8, 'rgba(160,160,160,1)'], [1, 'rgba(60,60,60,0)']]);
+    ctx.beginPath(); ctx.arc(10, 10, 9.5, 0, 6.3); ctx.fill();
+    addRaw('signal-lamp', c);
+  }
   // train stop
   for (let d = 0; d < 4; d++) {
     const f = frame(2, 2, 1.6, 0.2, 0.3);

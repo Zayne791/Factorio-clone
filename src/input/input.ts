@@ -9,6 +9,7 @@ import { BeltBase } from '../sim/belts';
 import { ElectricPole } from '../sim/power';
 import { faceTo } from '../sim/player';
 import { isWaterTile } from '../world/tiles';
+import { useSpidertronRemote } from '../sim/spidertron';
 
 export class Input {
   g: Game; r: Renderer; canvas: HTMLCanvasElement;
@@ -77,7 +78,7 @@ export class Input {
       case 'KeyF': this.pickingUp = true; break;
       case 'Space': case 'KeyC': if (!ctrl) this.shooting = true; else if (e.code === 'KeyC') g.logistics?.startTool('copy'); break;
       case 'AltLeft': case 'AltRight': this.alt = !this.alt; e.preventDefault(); break;
-      case 'Tab': p.selectedGun = (p.selectedGun + 1) % 3; e.preventDefault(); break;
+      case 'Tab': { const v = p.character.vehicle as any; if (v && v.gunSel !== undefined) v.gunSel++; else p.selectedGun = (p.selectedGun + 1) % 3; e.preventDefault(); break; }
       case 'Enter': g.ui?.toggleVehicle?.(); break;
       case 'Equal': case 'NumpadAdd': this.zoom(1.25); break;
       case 'Minus': case 'NumpadSubtract': this.zoom(0.8); break;
@@ -257,6 +258,7 @@ export class Input {
       return;
     }
     if (item && ITEMS[item].capsule) { g.combat?.useCapsule(item, this.wx, this.wy); return; }
+    if (item === 'spidertron-remote') { useSpidertronRemote(this.wx, this.wy); return; }
     const h = this.view.hover;
     if (h) {
       if (shift) { g.ui?.pasteSettings?.(h); return; }
@@ -302,6 +304,7 @@ export class Input {
     if (!it.place) return null;
     const proto = it.place;
     if (proto === 'straight-rail') return this.g.rails?.preview(this.wx, this.wy, this.buildDir) || null;
+    if (this.g.rails?.isAccessory?.(proto)) return this.g.rails.previewAccessory(proto, this.wx, this.wy) || null;
     const dir = this.buildDir;
     const [x, y] = this.snapPos(proto, this.wx, this.wy, dir);
     const chk = this.g.world.canPlace(proto, x, y, dir);
@@ -331,6 +334,7 @@ export class Input {
     }
     const proto = it.place!;
     if (proto === 'straight-rail') { g.rails?.buildAtCursor(this.wx, this.wy, this.buildDir, first); return; }
+    if (g.rails?.isAccessory?.(proto)) { if (first) g.rails.buildAccessory(proto, this.wx, this.wy, this.keys.has('ShiftLeft')); return; }
     let [x, y] = this.snapPos(proto, this.wx, this.wy, this.buildDir);
     const pr = ENTITIES[proto];
     // drag constraints

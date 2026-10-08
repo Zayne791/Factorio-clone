@@ -767,7 +767,28 @@ export class UI {
   toggleVehicle() { this.g.combat?.toggleVehicle?.(); }
   driveVehicle(mx: number, my: number) { this.g.combat?.drive?.(mx, my); }
   paste() { this.g.logistics?.paste(); }
-  showVictory() { }
+  showVictory() {
+    const g = this.g;
+    const w = new Win(this, 'Victory', 'victorywin', 'victory');
+    const b = w.body;
+    h('div', 'victory-title', b, 'You launched a rocket!');
+    h('div', 'label', b, 'Congratulations — your factory reached space. You can keep playing and grow it further.');
+    const st = h('div', 'col victory-stats', b);
+    const row = (k: string, v: string) => { const r = h('div', 'kv', st); h('span', '', r, k); h('b', '', r, v); };
+    const secs = g.playTicks / 60;
+    row('Time played', `${Math.floor(secs / 3600)}h ${Math.floor(secs / 60) % 60}m ${Math.floor(secs % 60)}s`);
+    row('Rockets launched', String(g.rocketsLaunched));
+    row('Technologies researched', String(Object.keys(g.research.levels).length));
+    row('Buildings', String([...g.world.entities.values()].filter(e => e.isBuilding).length));
+    row('Pollution produced', fmtNum(g.totalPollutionProduced));
+    row('Enemy evolution', ((g.enemies?.evolution ?? 0) * 100).toFixed(1) + '%');
+    const btns = h('div', 'row', b); btns.style.justifyContent = 'flex-end';
+    const c = h('div', 'btn green', btns, 'Continue');
+    c.onclick = () => this.closeWindow(w);
+    this.closeAll();
+    this.openWindow(w);
+    this.g.sound.play('research-complete', 1);
+  }
   placeBlueprint(x: number, y: number) { this.g.logistics?.placeBlueprint?.(x, y); }
 }
 

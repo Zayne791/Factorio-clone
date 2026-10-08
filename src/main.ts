@@ -7,13 +7,16 @@ import './sim/crafting';
 import './sim/mining';
 import './sim/simple';
 import './sim/military';
+import './sim/spidertron';
 import { HeatSystem } from './sim/heat';
 import { LogisticSystem } from './sim/logistics';
 import { CircuitSystem } from './sim/circuits';
+import { RailSystem } from './sim/rails';
 import { EnemySystem } from './sim/enemies';
 import { CombatSystem } from './sim/military';
 import { Renderer } from './engine/renderer';
 import { buildArt, IconSheet } from './art';
+import { loadArtCache, saveArtCache } from './art/cache';
 import { Game } from './game';
 import { G, clamp } from './core';
 import { Effects } from './render/fx';
@@ -29,6 +32,8 @@ import { DEFAULT_SETTINGS, MapSettings } from './world/mapgen';
 import { Menu } from './ui/menu';
 import { installExtras } from './extras';
 import { ArmorGridWindow, ItemPicker } from './ui/extra-windows';
+import { buildDemoFactory } from './ui/menu-demo';
+(window as any).__buildDemoFactory = buildDemoFactory;
 
 const loading = document.getElementById('loading')!;
 const loadBar = document.getElementById('load-bar') as HTMLDivElement;
@@ -51,9 +56,15 @@ async function boot() {
   resize();
   window.addEventListener('resize', resize);
   await progress(0.02, 'Preparing...');
-  sheets = await buildArt(renderer.atlas, progress);
-  await progress(0.97, 'Building texture atlas...');
-  renderer.atlas.build(renderer.gl);
+  const cached = await loadArtCache(renderer.atlas, renderer.gl);
+  if (cached) sheets = cached;
+  else {
+    sheets = await buildArt(renderer.atlas, progress);
+    await progress(0.97, 'Building texture atlas...');
+    renderer.atlas.build(renderer.gl);
+    const s = sheets;
+    setTimeout(() => saveArtCache(renderer.atlas, s), 4000);
+  }
   await progress(1, 'Ready');
   loading.classList.add('hidden');
   menu = new Menu({ newGame, loadGame: loadSave, resume: () => menu.hide(), isRunning: () => !!running, getGame: () => running?.game ?? null, quitToMenu });
@@ -77,6 +88,7 @@ function setupGame(game: Game) {
   game.heat = new HeatSystem();
   game.logistics = new LogisticSystem();
   game.circuits = new CircuitSystem();
+  game.rails = new RailSystem();
   const input = new Input(game, renderer, renderer.canvas);
   const ui = new UI(game, input, renderer, sheets.icons, sheets.techs);
   const wr = new WorldRenderer(renderer, game);
@@ -105,6 +117,7 @@ function require_tech(id: string) { return TECHS[id]?.name || id; }
 
 function newGame(settings: MapSettings) {
   if (running) quitToMenu(false);
+  menu.demo = null;
   const game = new Game(settings);
   const r = setupGame(game);
   game.start(true);
@@ -113,6 +126,7 @@ function newGame(settings: MapSettings) {
 }
 async function loadSave(data: any) {
   if (running) quitToMenu(false);
+  menu.demo = null;
   const { loadGameState } = await import('./save/save');
   const game = loadGameState(data, (g: Game) => setupGame(g));
   menu.hide();

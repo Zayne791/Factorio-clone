@@ -135,6 +135,7 @@ export class Worm extends Entity {
     if (this.health < this.maxHealth) this.health = Math.min(this.maxHealth, this.health + this.def.regen / 60);
     if (this.cooldown > 0) { this.cooldown--; return; }
     if ((g.tick + this.id) % 10 !== 0) return;
+    if (g.peaceful && !(this.base && this.base.aggro > 0)) return;
     const t = g.enemies.findPlayerTarget(this.x, this.y, this.def.range);
     if (!t) return;
     this.cooldown = 92; // 0.65 attacks/s
@@ -195,15 +196,17 @@ export class EnemyUnit extends Entity {
     if (this.slow > 0) this.slow--;
     const spd = this.def.speed * (this.slow > 0 ? 0.5 : 1);
     // acquire nearby targets (player, combat robots, turrets)
-    if ((g.tick + this.id) % 15 === 0) {
+    if ((g.tick + this.id) % 15 === 0 && !(g.peaceful && this.state === S_IDLE && !(this.home?.base && this.home.base.aggro > 0))) {
       if (!this.target || this.target.dead) this.target = null;
       const aggroR = this.state === S_ATTACK ? 15 : this.state === S_IDLE ? 9 : 12;
       const t = en.findPlayerTarget(this.x, this.y, aggroR, true);
       if (t && (!this.target || dist(this, t) < dist(this, this.target) - 2)) { this.target = t; if (this.state === S_IDLE) this.state = S_ATTACK; }
     }
     if (this.target && !this.target.dead) {
-      const d = dist(this, this.target) - Math.max(this.target.w, this.target.h) / 2;
-      if (d <= this.def.range + 0.25) { this.attack(this.target); return; }
+      const t = this.target;
+      const bx = Math.max(0, Math.abs(this.x - t.x) - t.w / 2), by = Math.max(0, Math.abs(this.y - t.y) - t.h / 2);
+      const d = Math.hypot(bx, by);
+      if (d <= this.def.range + 0.4) { this.attack(t); return; }
       this.moveToward(this.target.x, this.target.y, spd);
       return;
     }
@@ -244,6 +247,7 @@ export class EnemyUnit extends Entity {
     if (this.targetPos && dist2(this.x, this.y, this.targetPos[0], this.targetPos[1]) > 1) this.moveToward(this.targetPos[0], this.targetPos[1], spd * 0.35);
   }
   attack(t: Entity) {
+    if ((t as any).vehicle) { t = (t as any).vehicle; this.target = t; }
     this.face = dirTo(t.x - this.x, t.y - this.y);
     if (this.cooldown > 0) return;
     this.cooldown = this.def.cooldown;
@@ -330,8 +334,11 @@ class FlowField {
   static build(tx: number, ty: number, fx: number, fy: number): FlowField {
     const g = G.game, w = g.world;
     const pad = 24;
-    const x0 = Math.min(tx, fx) - pad, y0 = Math.min(ty, fy) - pad;
     const W = Math.min(320, Math.abs(tx - fx) + pad * 2), H = Math.min(320, Math.abs(ty - fy) + pad * 2);
+    let x0 = Math.min(tx, fx) - pad, y0 = Math.min(ty, fy) - pad;
+    // long attacks: anchor the window on the target so it is always inside the field
+    if (tx - x0 >= W - pad / 2) x0 = tx - W + pad;
+    if (ty - y0 >= H - pad / 2) y0 = ty - H + pad;
     const ff = new FlowField(x0, y0, W, H);
     const cost = new Uint8Array(W * H);
     for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
@@ -342,8 +349,8 @@ class FlowField {
     }
     // bucket Dijkstra
     const buckets: number[][] = [];
+    if (tx - x0 < 0 || tx - x0 >= W || ty - y0 < 0 || ty - y0 >= H) return ff;
     const start = (ty - y0) * W + (tx - x0);
-    if (start < 0 || start >= W * H) return ff;
     ff.d[start] = 0; buckets[0] = [start];
     for (let b = 0; b < buckets.length; b++) {
       const q = buckets[b]; if (!q) continue;
@@ -382,12 +389,13 @@ export class EnemySystem {
   bases: EnemyBase[] = [];
   units: EnemyUnit[] = [];
   groups: AttackGroup[] = [];
-  evoRaw = 0;          // unsquashed total
+  evo = 0;             // evolution factor 0..1
   nextBaseId = 1;
   nextExpansion = 60 * 60 * 10;
   lastActivate = 0;
   constructor() { }
-  get evolution() { return this.evoRaw / (1 + this.evoRaw); }
+  get evolution() { return this.evo; }
+  addEvo(inc: number) { this.evo += inc * (1 - this.evo); }
   get enabled() { return !G.game.settings.noEnemies; }
   isEnemy(e: Entity) { return e instanceof EnemyUnit || e instanceof Spawner || e instanceof Worm; }
 
@@ -439,14 +447,15 @@ export class EnemySystem {
     return true;
   }
 
-  onPollution(amount: number) { this.evoRaw += 0.0000009 * amount * (G.game.peaceful ? 1 : 1); }
+  onPollution(amount: number) { this.addEvo(0.0000009 * amount); }
   absorbPollution(c: any) {
     if (!this.enabled || G.game.peaceful) return;
     const x0 = c.cx * CHUNK, y0 = c.cy * CHUNK;
     for (const b of this.bases) {
-      if (b.x < x0 || b.x >= x0 + CHUNK || b.y < y0 || b.y >= y0 + CHUNK) continue;
+      if (b.x < x0 - 64 || b.x >= x0 + CHUNK + 64 || b.y < y0 - 64 || b.y >= y0 + CHUNK + 64) continue;
       for (const s of b.spawners) {
         if (s.dead || c.pollution <= 0) continue;
+        if (s.x < x0 || s.x >= x0 + CHUNK || s.y < y0 || s.y >= y0 + CHUNK) continue;
         const take = Math.min(c.pollution, c.pollution > 20 ? 20 + 0.01 * c.pollution : c.pollution);
         c.pollution -= take;
         b.pollutionBudget += take;
@@ -527,16 +536,17 @@ export class EnemySystem {
     g.fx?.blood(e.x, e.y);
     g.stats.kill(e instanceof Spawner ? e.kind : 'worm');
     if (e instanceof Spawner) {
-      this.evoRaw += 0.002;
+      this.addEvo(0.002);
       for (const u of e.owned) if (!u.dead) { u.home = null; }
       const r = new Remnants('remnants', e.x, e.y, 0); r.size = 2.2; r.born = g.tick; g.world.addEntity(r, false);
+      this.corpses.push(r);
     }
   }
 
   tick() {
     if (!this.enabled) return;
     const g = G.game;
-    this.evoRaw += 0.000004 / 60;
+    this.addEvo(0.000004 / 60);
     const p = g.player;
     // activate bases near the player (materialize units), deactivate far ones
     if (g.tick % 60 === 0) {
@@ -589,6 +599,11 @@ export class EnemySystem {
       }
       gr.units = gr.units.filter(u => !u.dead);
       if (gr.launched && (!gr.units.length || gr.done)) gr.done = true;
+      // give up after 5 minutes (unreachable target, blocked by water...)
+      if (gr.launched && g.tick - gr.launchAt > 60 * 60 * 5) {
+        for (const u of gr.units) if (u.group === gr) { u.group = null; u.state = S_RETURN; u.target = null; }
+        gr.done = true;
+      }
     }
     this.groups = this.groups.filter(gr => !gr.done || gr.units.some(u => !u.dead && u.state === S_ATTACK));
     // expansion
@@ -651,14 +666,16 @@ export class EnemySystem {
   }
 
   serialize() {
-    return { evo: this.evoRaw, nb: this.nextBaseId, ne: this.nextExpansion, pend: this.pending, bases: this.bases.map(b => ({ id: b.id, x: b.x, y: b.y, pb: b.pollutionBudget })) };
+    return { ev: this.evo, nb: this.nextBaseId, ne: this.nextExpansion, pend: this.pending, bases: this.bases.map(b => ({ id: b.id, x: b.x, y: b.y, pb: b.pollutionBudget })) };
   }
   load(d: any) {
     if (!d) return;
-    this.evoRaw = d.evo || 0; this.nextBaseId = d.nb || 1; this.nextExpansion = d.ne || this.nextExpansion; this.pending = d.pend || [];
+    this.evo = d.ev ?? (d.evo ? d.evo / (1 + d.evo) : 0); this.nextBaseId = d.nb || 1; this.nextExpansion = d.ne || this.nextExpansion; this.pending = d.pend || [];
     const byId = new Map<number, EnemyBase>();
     this.bases = (d.bases || []).map((b: any) => { const eb = new EnemyBase(b.id, b.x, b.y); eb.pollutionBudget = b.pb || 0; byId.set(b.id, eb); return eb; });
+    this.corpses = [];
     for (const e of G.game.world.entities.values()) {
+      if (e instanceof Remnants && (e.sprite.endsWith('-corpse') || e.size === 2.2)) this.corpses.push(e);
       if (e instanceof Spawner || e instanceof Worm) {
         let b = byId.get((e as any)._baseId);
         if (!b) { b = new EnemyBase(this.nextBaseId++, e.x, e.y); this.bases.push(b); byId.set(b.id, b); }

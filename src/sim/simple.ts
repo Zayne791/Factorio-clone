@@ -38,6 +38,14 @@ export class Container extends Entity {
   load(d: any) { this.inv.load(d.i); this.requests = d.rq || []; this.requestFromBuffers = !!d.rb; }
 }
 
+// Character corpse holding the dead player's items: not a building, cannot be damaged.
+export class CharacterCorpse extends Container {
+  get isBuilding() { return false; }
+  get blocksMovement() { return false; }
+  get minable() { return true; }
+  damage() { return 0; }
+}
+
 export class CargoLandingPad extends Container {
   draw(r: Renderer) {
     const a = r.atlas;

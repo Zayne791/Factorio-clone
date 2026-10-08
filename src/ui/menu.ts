@@ -4,6 +4,7 @@ import { listSaves, readSave, writeSave, deleteSave, exportSave, importSaveFile 
 import type { Game } from '../game';
 import type { Renderer } from '../engine/renderer';
 import { fmtTime } from '../core';
+import { MenuDemo } from './menu-demo';
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls = '', parent?: HTMLElement, text?: string) {
   const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; if (parent) parent.appendChild(e); return e;
@@ -225,8 +226,14 @@ export class Menu {
     const btns = el('div', 'row', win); btns.style.marginTop = '10px';
     el('div', 'btn', btns, 'Back').onclick = back;
   }
+  demo: MenuDemo | null = null;
+  demoFailed = false;
   renderBackground(r: Renderer, dt: number) {
-    // clear screen while in menu
+    if (!this.demo && !this.demoFailed) {
+      try { this.demo = new MenuDemo(r); } catch (e) { console.warn('menu demo failed', e); this.demoFailed = true; }
+    }
+    if (this.demo) { try { this.demo.render(r, dt); return; } catch (e) { console.warn('menu demo render failed', e); this.demo = null; this.demoFailed = true; } }
+    // fallback: clear screen while in menu
     const gl = r.gl;
     gl.viewport(0, 0, r.vw, r.vh);
     gl.clearColor(0.05, 0.045, 0.04, 1);

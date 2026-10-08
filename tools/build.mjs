@@ -19,9 +19,19 @@ function copyDir(src, dst) {
   }
 }
 
+// Art cache key: changes only when procedural art or game data changes
+function artVersion() {
+  const h = crypto.createHash('sha1');
+  const walk = d => { for (const f of fs.readdirSync(d).sort()) { const p = path.join(d, f); if (fs.statSync(p).isDirectory()) walk(p); else h.update(f + fs.readFileSync(p)); } };
+  walk(path.join(root, 'src/art')); walk(path.join(root, 'src/data'));
+  h.update(fs.readFileSync(path.join(root, 'src/engine/atlas.ts')));
+  return h.digest('hex').slice(0, 12);
+}
+
 async function build() {
   const t0 = Date.now();
   await esbuild.build({
+    define: { __ART_VERSION__: JSON.stringify(artVersion()) },
     entryPoints: [path.join(root, 'src/main.ts')],
     bundle: true, minify: !dev, sourcemap: dev ? 'inline' : false,
     target: ['safari15', 'chrome100'], format: 'iife',

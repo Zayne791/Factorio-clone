@@ -8,10 +8,11 @@ import { BeltSystem, BeltBase } from './sim/belts';
 import { FluidSystem } from './sim/fluids';
 import { ElectricSystem, ElectricPole } from './sim/power';
 import { Research, Stats, Bonuses, emptyBonuses } from './sim/research';
-import { ItemOnGround, Tree, Rock, Fish, Remnants, Container } from './sim/simple';
+import { ItemOnGround, Tree, Rock, Fish, Remnants, Container, CharacterCorpse } from './sim/simple';
 import { ENTITIES, ITEMS, TECHS, itemName } from './data/protos';
 import { PLACE_TILE_ID, isWaterTile, isPlayerTile, TILES } from './world/tiles';
 import { Stack } from './sim/inventory';
+import { spawnCrashSite } from './sim/crashsite';
 import type { Renderer } from './engine/renderer';
 
 export interface FX {
@@ -90,6 +91,7 @@ export class Game {
       this.player.character.x = sx; this.player.character.y = sy;
       this.player.spawnX = sx; this.player.spawnY = sy;
       this.world.addUnit(this.player.character);
+      if (!(this.settings as any).noCrashSite) spawnCrashSite(sx, sy);
       // Factorio 2.0 freeplay start: pistol, 10 ammo, 8 iron plates, 1 burner drill, 1 stone furnace + wood
       const p = this.player;
       p.give('pistol', 1); p.give('firearm-magazine', 10);
@@ -137,7 +139,7 @@ export class Game {
 
   // ---------- entity lifecycle ----------
   addEntity(e: Entity) {
-    this.world.addEntity(e);
+    if ((e as any).isUnit) this.world.addUnit(e); else this.world.addEntity(e);
     const ph = e.phase;
     if (ph >= 0) this.updatables[ph].push(e);
     e.onPlaced();
@@ -307,7 +309,7 @@ export class Game {
     }
   }
   spawnCorpse(x: number, y: number, items: Stack[]) {
-    const c = new Container('wooden-chest', x, y, 0);
+    const c = new CharacterCorpse('wooden-chest', x, y, 0);
     (c as any).type = 'character-corpse';
     c.inv.resize(items.length + 4);
     for (const s of items) c.inv.insertStack(s);

@@ -42,7 +42,7 @@ export class Character extends Entity {
     return d;
   }
   draw(r: Renderer) {
-    if (this.vehicle) return;
+    if (this.vehicle || this.dead) return;
     const a = r.atlas;
     const pl = G.game.player;
     const armor = pl.armor.slots[0]?.id;
@@ -351,7 +351,11 @@ export class Player {
   die() {
     const g = G.game;
     const ch = this.character;
+    if (ch.dead) return;
+    const v = ch.vehicle as any;
+    if (v) { v.driver = null; ch.vehicle = null; }
     ch.dead = true;
+    g.world.removeUnit(ch);
     // corpse with items
     const items: Stack[] = [];
     for (const inv of [this.main, this.guns, this.ammo, this.armor, this.trash]) { for (const s of inv.slots) if (s) items.push(s); inv.clear(); }

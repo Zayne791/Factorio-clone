@@ -4,11 +4,12 @@ import { setAtlas } from './sprites-common';
 import { buildBelts, buildChests, buildInserters, buildPoles, buildPipes, buildMisc } from './sprites-logistics';
 import { buildProduction } from './sprites-production';
 import { buildTrees, buildRocks, buildOres, buildDecoratives, buildCharacter, buildEnemies, buildMilitary, buildVehicles, buildRailParts, buildEffects, buildOverlays } from './sprites-world';
+import { buildCrashSite } from './sprites-crash';
 import { drawIconCanvas, ICON, VIRTUAL_SIGNALS, RECIPE_ICON_IDS, HAS_CUSTOM_ICON } from './icons';
 import { ITEMS, FLUIDS, RECIPES, TECHS, ENTITIES } from '../data/protos';
 import { mkc, rrect, css, Ctx } from './draw';
 
-export interface IconSheet { url: string; cols: number; size: number; index: Map<string, number>; w: number; h: number; }
+export interface IconSheet { url: string; cols: number; size: number; index: Map<string, number>; w: number; h: number; blob?: Blob | null; }
 
 const ENTITY_ICON_SPRITES: Record<string, string> = {};
 
@@ -22,7 +23,7 @@ export async function buildArt(atlas: Atlas, progress: (p: number, msg: string) 
     ['Engineer', () => buildCharacter()],
     ['Enemies', () => buildEnemies()],
     ['Military', () => { buildMilitary(); buildVehicles(); buildRailParts(); }],
-    ['Effects', () => { buildEffects(); buildOverlays(); }],
+    ['Effects', () => { buildEffects(); buildOverlays(); buildCrashSite(); }],
   ];
   for (let i = 0; i < steps.length; i++) {
     await progress(i / (steps.length + 3), 'Drawing ' + steps[i][0].toLowerCase() + '...');
@@ -77,18 +78,18 @@ export async function buildArt(atlas: Atlas, progress: (p: number, msg: string) 
     void t;
   });
   await progress((steps.length + 2) / (steps.length + 3), 'Uploading textures...');
-  const url = await canvasURL(sheet);
-  const turl = await canvasURL(tsheet);
+  const [url, blob] = await canvasURL(sheet);
+  const [turl, tblob] = await canvasURL(tsheet);
   return {
-    icons: { url, cols, size: ICON, index, w: sheet.width, h: sheet.height },
-    techs: { url: turl, cols: tcols, size: TS, index: tindex, w: tsheet.width, h: tsheet.height },
+    icons: { url, cols, size: ICON, index, w: sheet.width, h: sheet.height, blob },
+    techs: { url: turl, cols: tcols, size: TS, index: tindex, w: tsheet.width, h: tsheet.height, blob: tblob },
   };
 }
 
-function canvasURL(c: HTMLCanvasElement): Promise<string> {
+function canvasURL(c: HTMLCanvasElement): Promise<[string, Blob | null]> {
   return new Promise(res => {
-    if (c.toBlob) c.toBlob(b => res(b ? URL.createObjectURL(b) : c.toDataURL()), 'image/png');
-    else res(c.toDataURL());
+    if (c.toBlob) c.toBlob(b => res(b ? [URL.createObjectURL(b), b] : [c.toDataURL(), null]), 'image/png');
+    else res([c.toDataURL(), null]);
   });
 }
 

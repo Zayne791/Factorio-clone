@@ -102,6 +102,8 @@ export class CircuitSystem {
 
   rebuild() {
     this.dirty = false;
+    const before = new Set<Entity>();
+    for (const n of this.nets) for (const [e] of n.nodes) before.add(e);
     const parent = new Map<string, string>();
     const find = (k: string): string => { let r = k; while (parent.get(r) !== r) r = parent.get(r)!; let c = k; while (parent.get(c) !== r) { const n = parent.get(c)!; parent.set(c, r); c = n; } return r; };
     const node = (e: Entity, t: number, c: Color) => { const k = `${e.id}:${t}:${c}`; if (!parent.has(k)) parent.set(k, k); return k; };
@@ -127,6 +129,14 @@ export class CircuitSystem {
       }
       net.nodes.push(en);
       this.nodeNet.set(k, net);
+    }
+    // entities no longer on any circuit network return to their default (enabled) behaviour
+    const after = new Set<Entity>();
+    for (const n of this.nets) for (const [e] of n.nodes) after.add(e);
+    for (const e of before) if (!after.has(e) && !e.dead) {
+      e.active = true;
+      if (e.type === 'transport-belt') (e as any).power = 1;
+      if (e.type === 'lamp') (e as any).color = null;
     }
   }
   netOf(e: Entity, t: number, c: Color) { return this.nodeNet.get(`${e.id}:${t}:${c}`) || null; }
@@ -199,7 +209,7 @@ export class CircuitSystem {
       case 'reactor': add(s, 'signal-T', Math.round(x.temp)); for (const st of x.burner.fuel.slots) if (st) add(s, st.id, st.n); return s;
       case 'transport-belt':
         if (!c.read) return null;
-        for (const [id, n] of x.contentsOnTile ? x.contentsOnTile() : []) add(s, id, n);
+        for (const st of e.contents()) add(s, st.id, st.n);
         return s;
     }
     return null;
@@ -213,6 +223,7 @@ export class CircuitSystem {
     const inp = this.input(e, 1);
     if (c.en && c.cond) e.active = evalCond(c.cond, inp);
     else e.active = true;
+    if (e.type === 'transport-belt') x.power = e.active ? 1 : 0;   // a disabled belt stops moving its items
     if (e.type === 'lamp') {
       if (c.color) {
         const cols: [string, [number, number, number]][] = [['signal-red', [1, 0.2, 0.2]], ['signal-green', [0.2, 1, 0.2]], ['signal-blue', [0.3, 0.4, 1]], ['signal-yellow', [1, 1, 0.2]], ['signal-pink', [1, 0.4, 0.8]], ['signal-cyan', [0.2, 1, 1]], ['signal-white', [1, 1, 1]]];

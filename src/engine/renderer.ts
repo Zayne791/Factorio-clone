@@ -444,13 +444,13 @@ export class Renderer {
     if (this.redirect) { if (batch === 'shadow' || batch === 'light') return; batch = this.redirect; color = this.tint; }
     this.batches[batch].push(s, x, y, w, h, rot, color, key ?? y);
   }
-  line(batch: BatchName, s: Sprite | undefined, x1: number, y1: number, x2: number, y2: number, width: number, color = WHITE) {
+  line(batch: BatchName, s: Sprite | undefined, x1: number, y1: number, x2: number, y2: number, width: number, color = WHITE, key = 0) {
     if (!s) return;
     if (this.redirect) { if (batch === 'shadow' || batch === 'light') return; batch = this.redirect; color = this.tint; }
     const dx = x2 - x1, dy = y2 - y1;
     const len = Math.hypot(dx, dy);
     if (len < 1e-4) return;
-    this.batches[batch].push(s, (x1 + x2) / 2, (y1 + y2) / 2, len, width, Math.atan2(dy, dx), color, 0);
+    this.batches[batch].push(s, (x1 + x2) / 2, (y1 + y2) / 2, len, width, Math.atan2(dy, dx), color, key);
   }
 
   uploadTiles() {

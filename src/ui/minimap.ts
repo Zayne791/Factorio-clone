@@ -30,6 +30,7 @@ export function chunkImage(g: Game, c: Chunk): HTMLCanvasElement {
   }
   // entities
   for (const e of c.ents) {
+    if ((e as any).isRail) continue; // painted along the track by the rail system
     let mc: string | undefined;
     if (e.type === 'tree') { mc = '1f3618'; }
     else if (e.type === 'simple-entity') mc = '6a6a5a';
@@ -46,6 +47,7 @@ export function chunkImage(g: Game, c: Chunk): HTMLCanvasElement {
       else { d[i] = rgb[0]; d[i + 1] = rgb[1]; d[i + 2] = rgb[2]; }
     }
   }
+  g.rails?.paintMap?.(c, d);
   ctx.putImageData(img, 0, 0);
   return cv;
 }

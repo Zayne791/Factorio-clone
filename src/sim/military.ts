@@ -60,7 +60,7 @@ function friendliesNear(x: number, y: number, r: number): Entity[] {
   const g = G.game;
   const out: Entity[] = g.world.entitiesIn(x - r, y - r, x + r, y + r, e => e.isBuilding && !e.dead, 6)
     .filter(e => Math.hypot(e.x - x, e.y - y) <= r + Math.max(e.w, e.h) / 2);
-  for (const u of g.world.units) if (isFriendly(u) && !u.dead && Math.hypot(u.x - x, u.y - y) <= r + 0.3) out.push(u);
+  for (const u of g.world.units) if (isFriendly(u) && !u.dead && !(u instanceof Character && u.vehicle) && Math.hypot(u.x - x, u.y - y) <= r + 0.3) out.push(u);
   return out;
 }
 export function areaDamage(x: number, y: number, r: number, amount: number, type: string, source: any, opts: { friendly?: boolean; enemies?: boolean; trees?: boolean; falloff?: boolean } = {}) {
@@ -205,7 +205,7 @@ export class AmmoTurret extends Turret {
   rounds = 0;
   constructor(p: string, x: number, y: number, d: Dir) {
     super(p, x, y, d);
-    (this.inv as any).accepts = (id: string) => ITEMS[id]?.ammo?.cat === (this.proto.turretAmmo || 'bullet');
+    (this.inv as any).accepts = (id: string) => this.isAmmo(id);
   }
   get ammoCat() { return this.proto.turretAmmo || 'bullet'; }
   inventories() { return [this.inv]; }
@@ -372,7 +372,7 @@ export class ArtilleryTurret extends AmmoTurret {
     if (!this.aim() || this.cooldown > 0) return;
     this.inv.remove(s.id, 1);
     G.game.stats.consume(s.id, 1);
-    this.cooldown = 200;
+    this.cooldown = Math.max(1, Math.round(200 / speedMult('artillery')));
     const t = this.target;
     const g = G.game;
     const [mx, my] = this.muzzlePos(2);
@@ -456,11 +456,6 @@ export class Vehicle extends Entity {
   get blocksMovement() { return false; }
   get tx() { return Math.floor(this.x); }
   get ty() { return Math.floor(this.y); }
-  onPlaced() {
-    const w = G.game.world;
-    w.removeEntity(this);
-    w.addUnit(this);
-  }
   onRemoved() {
     if (this.driver) G.game.combat?.exitVehicle();
   }
@@ -468,7 +463,21 @@ export class Vehicle extends Entity {
   wantsFuel(id: string) { return this.burner.wantsFuel(id); }
   insertItem(id: string, n: number, src = 'inserter') {
     if (this.burner.isFuel(id) && this.burner.fuel.space(id) > 0) return this.burner.fuel.insert(id, n);
-    if (ITEMS[id]?.ammo) { const k = this.ammo.insert(id, n); if (k) return k; }
+    const am = ITEMS[id]?.ammo;
+    if (am) {
+      const guns = this.spec.guns;
+      let got = 0;
+      for (let i = 0; i < guns.length && got < n; i++) {
+        if (VGUN[guns[i]].cat !== am.cat) continue;
+        const s = this.ammo.slots[i];
+        if (s && s.id !== id) continue;
+        const k = Math.min(n - got, ITEMS[id].stack - (s?.n || 0));
+        if (k <= 0) continue;
+        if (s) s.n += k; else this.ammo.slots[i] = { id, n: k };
+        got += k;
+      }
+      if (got) { this.ammo.changed(); return got; }
+    }
     return this.trunk.insert(id, n);
   }
   takeOutput(max: number, filter?: (id: string) => boolean) { return this.trunk.takeAny(max, filter); }
@@ -522,9 +531,15 @@ export class Vehicle extends Entity {
     this.speed = Math.abs(this.speed) <= fr ? 0 : this.speed - Math.sign(this.speed) * fr;
     if (this.speed === 0) return;
     const vx = Math.sin(this.orient) * this.speed, vy = -Math.cos(this.orient) * this.speed;
-    const nx = this.x + vx, ny = this.y + vy;
-    const hit = this.collide(nx, ny);
+    const steps = Math.max(1, Math.ceil(Math.abs(this.speed) / 0.2));
+    let nx = this.x, ny = this.y, hit: Entity | 'water' | null = null;
+    for (let i = 0; i < steps && !hit; i++) {
+      const px = nx + vx / steps, py = ny + vy / steps;
+      hit = this.collide(px, py);
+      if (!hit) { nx = px; ny = py; }
+    }
     if (hit === 'water' || hit) {
+      this.x = nx; this.y = ny;
       const impact = Math.abs(this.speed) * 216; // km/h-ish
       if (hit !== 'water') {
         const e = hit as Entity;
@@ -550,10 +565,21 @@ export class Vehicle extends Entity {
     if (this.engineT > 0 && (g.tick % 12) === 0 && this.driver) g.sound.play('car', 0.25 + Math.abs(this.speed));
     if (this.driver) { this.driver.x = this.x; this.driver.y = this.y; }
   }
+  // footprint sample points (local, pointing north), spacing <= 0.3 tiles
+  private samples: [number, number][] | null = null;
+  footprint(): [number, number][] {
+    if (this.samples) return this.samples;
+    const [W, L] = this.name === 'tank' ? [2.0, 3.2] : [1.2, 2.3];
+    const nx = Math.ceil(W / 0.3), ny = Math.ceil(L / 0.3);
+    const out: [number, number][] = [];
+    for (let j = 0; j <= ny; j++) for (let i = 0; i <= nx; i++) out.push([-W / 2 + W * i / nx, -L / 2 + L * j / ny]);
+    return this.samples = out;
+  }
   collide(x: number, y: number): Entity | 'water' | null {
     const w = G.game.world;
-    const r = this.w / 2 - 0.1;
-    for (const [ox, oy] of [[-r, -r], [r, -r], [-r, r], [r, r], [0, 0]]) {
+    const c0 = Math.cos(this.orient), s0 = Math.sin(this.orient);
+    for (const [lx, ly] of this.footprint()) {
+      const ox = lx * c0 - ly * s0, oy = lx * s0 + ly * c0;
       const tx = Math.floor(x + ox), ty = Math.floor(y + oy);
       const c = w.chunkAt(tx, ty);
       if (!c) return 'water';
@@ -569,12 +595,19 @@ export class Vehicle extends Entity {
   shoot(tx: number, ty: number, auto: boolean) {
     const g = G.game;
     const guns = this.spec.guns;
-    let sel = this.gunSel % guns.length;
-    for (let k = 0; k < guns.length && !this.ammo.slots[sel] && this.rounds[sel] <= 0; k++) sel = (sel + 1) % guns.length;
+    // selected weapon; fall back to the next weapon that has matching ammo
+    let sel = -1, slot = -1;
+    for (let k = 0; k < guns.length && sel < 0; k++) {
+      const gi = (this.gunSel + k) % guns.length;
+      const cat = VGUN[guns[gi]].cat;
+      if (this.rounds[gi] > 0) { sel = gi; break; }
+      const si = this.ammo.slots.findIndex((st, i) => st && ITEMS[st.id]?.ammo?.cat === cat && (i === gi || true));
+      if (si >= 0) { sel = gi; slot = si; }
+    }
+    if (sel < 0) return;
     const gun = VGUN[guns[sel]];
-    const s = this.ammo.slots[sel];
-    if (!s && this.rounds[sel] <= 0) return;
-    const ammoId = s?.id || (this as any)['last' + sel];
+    const s = slot >= 0 ? this.ammo.slots[slot] : null;
+    const ammoId = this.rounds[sel] > 0 ? (this as any)['last' + sel] : s?.id;
     const ammo = ammoId ? ITEMS[ammoId]?.ammo : null;
     if (!ammo || ammo.cat !== gun.cat) return;
     let target: Entity | null = findEnemy(tx, ty, 3) || (auto ? findEnemy(this.x, this.y, gun.range) : null);
@@ -796,7 +829,7 @@ export class CombatSystem {
     if (p.dead) return;
     if (ch.vehicle) { this.exitVehicle(); return; }
     let best: Vehicle | null = null, bd = 6;
-    for (const u of g.world.units) if (u instanceof Vehicle && !u.dead && !u.driver) { const d = Math.hypot(u.x - ch.x, u.y - ch.y); if (d < bd) { bd = d; best = u; } }
+    for (const u of g.world.units) if (u instanceof Vehicle && !u.dead && (!u.driver || u.driver.dead)) { const d = Math.hypot(u.x - ch.x, u.y - ch.y); if (d < bd) { bd = d; best = u; } }
     if (!best) return;
     ch.vehicle = best; best.driver = ch;
     ch.x = best.x; ch.y = best.y;
@@ -874,7 +907,7 @@ export class CombatSystem {
     for (let i = 0; i < lasers && p.battery >= 50e3; i++) {
       const t = targets[i % targets.length];
       p.battery -= 50e3;
-      t.damage(10 * dmgMult('laser'), 'laser', ch);
+      t.damage(10 * dmgMult('laser'), 'laser', ch.vehicle || ch);
       g.fx?.laser(ch.x, ch.y - 1.2, t.x, t.y);
       shots++;
     }

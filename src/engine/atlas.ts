@@ -61,13 +61,26 @@ export class Atlas {
         pw: cw, ph: ch, w: cw / pl.p.scale, h: ch / pl.p.scale, ox: pl.p.ox, oy: pl.p.oy,
       });
     }
+    this.upload(gl, pageCanvases);
+    this.pending = [];
+    this.pageCanvases = pageCanvases;
+  }
+  pageCanvases: HTMLCanvasElement[] | null = null;
+  // Restore from cached page images + sprite table (see art/cache.ts)
+  buildFromCache(gl: WebGL2RenderingContext, pages: TexImageSource[], sprites: Sprite[]) {
+    this.sprites = new Map(sprites.map(s => [s.name, s]));
+    this.pages = pages.length;
+    this.upload(gl, pages);
+    this.pending = [];
+  }
+  private upload(gl: WebGL2RenderingContext, pageSources: TexImageSource[]) {
     const tex = gl.createTexture()!;
     gl.bindTexture(gl.TEXTURE_2D_ARRAY, tex);
     const levels = 5;
     gl.texStorage3D(gl.TEXTURE_2D_ARRAY, levels, gl.RGBA8, PAGE, PAGE, this.pages);
     gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true);
     for (let i = 0; i < this.pages; i++) {
-      gl.texSubImage3D(gl.TEXTURE_2D_ARRAY, 0, 0, 0, i, PAGE, PAGE, 1, gl.RGBA, gl.UNSIGNED_BYTE, pageCanvases[i]);
+      gl.texSubImage3D(gl.TEXTURE_2D_ARRAY, 0, 0, 0, i, PAGE, PAGE, 1, gl.RGBA, gl.UNSIGNED_BYTE, pageSources[i]);
     }
     gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
     gl.generateMipmap(gl.TEXTURE_2D_ARRAY);
@@ -77,8 +90,6 @@ export class Atlas {
     gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MAX_LEVEL, levels - 1);
     this.tex = tex;
-    this.pending = [];
-    (this as any)._debugPages = pageCanvases;
   }
 }
 

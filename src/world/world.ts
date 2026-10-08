@@ -162,6 +162,7 @@ export class World {
     const near = this.entitiesIn(px - 0.01, py - 0.01, px + 0.01, py + 0.01, e => e.selectable, 6);
     for (const e of near) if (e.type === 'item-on-ground') return e;
     for (const e of near) if (e.type !== 'straight-rail' && e.type !== 'curved-rail') return e;
+    if (G.game?.rails) return G.game.rails.railAt(px, py);
     return near[0] || null;
   }
 
@@ -220,6 +221,14 @@ export class World {
         if (!this.chunkAt(tx, ty)) return { ok: false, reason: 'Ungenerated area' };
       }
       if (this.isWater(fx, fy) || !this.isWater(bx, by) || !this.isWater(ffx, ffy)) return { ok: false, reason: 'Must be placed at the shore, facing land' };
+    }
+    // vehicles block placement
+    if (!opts.ghost && !p.walkable && G.game) {
+      for (const u of this.units) {
+        if (!(u as any).isVehicle || u.dead || (u as any).isRollingStock) continue;
+        const r = Math.max(u.w, u.h) / 2;
+        if (u.x + r > x0 && u.x - r < x0 + w && u.y + r > y0 && u.y - r < y0 + h) return { ok: false, reason: 'Vehicle in the way' };
+      }
     }
     // character collision for blocking entities
     if (!opts.ghost && p.type !== 'transport-belt' && !p.walkable && G.game?.player) {

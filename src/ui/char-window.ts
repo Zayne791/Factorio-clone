@@ -70,6 +70,7 @@ export class CharacterWindow extends Win {
     // inventory
     const ip = h('div', 'panel', cols);
     this.inv = new InventoryPanel(ui, ip, 'Inventory', () => p.main, () => null);
+    this.buildLogistics(ip);
     // crafting
     const cp = h('div', 'panel col', cols);
     const ch = h('div', 'row', cp);
@@ -92,6 +93,50 @@ export class CharacterWindow extends Win {
     const rs = h('div', 'scroll', cp); rs.style.maxHeight = 'calc(100vh - 270px)';
     this.recipeGrid = h('div', 'recipe-grid', rs);
     this.buildRecipes();
+  }
+  logiSlots: HTMLDivElement[] = [];
+  trashSlots: HTMLDivElement[] = [];
+  buildLogistics(parent: HTMLElement) {
+    const ui = this.ui, p = ui.g.player;
+    const box = h('div', 'col logi-box', parent);
+    const hdr = h('div', 'row', box);
+    h('div', 'subtitle', hdr, 'Logistics');
+    h('div', 'spacer', hdr);
+    const tg = h('label', 'row mini-label', hdr);
+    const cb = h('input', '', tg) as HTMLInputElement; cb.type = 'checkbox'; cb.checked = p.personalLogistics;
+    cb.onchange = () => p.personalLogistics = cb.checked;
+    tg.append(' Requests enabled');
+    const grid = h('div', 'grid', box); grid.style.gridTemplateColumns = 'repeat(10, var(--slot))';
+    const editor = h('div', 'row hidden', box);
+    h('span', 'mini-label', editor, 'Min');
+    const mn = h('input', '', editor) as HTMLInputElement; mn.type = 'number'; mn.min = '0'; mn.style.width = '80px';
+    h('span', 'mini-label', editor, 'Max');
+    const mx = h('input', '', editor) as HTMLInputElement; mx.type = 'number'; mx.min = '0'; mx.style.width = '80px'; mx.placeholder = '∞';
+    let ei = -1;
+    const apply = () => { const q = p.logisticRequests[ei]; if (!q) return; q.min = Math.max(0, parseInt(mn.value || '0', 10)); q.max = mx.value === '' ? Infinity : Math.max(q.min, parseInt(mx.value, 10)); };
+    mn.oninput = apply; mx.oninput = apply;
+    for (let i = 0; i < 10; i++) {
+      const s = ui.slot(grid, {
+        onLeft: () => {
+          const q = p.logisticRequests[i];
+          const open = () => { ei = i; const r = p.logisticRequests[i]; mn.value = String(r.min); mx.value = r.max === Infinity || r.max === undefined ? '' : String(r.max); editor.classList.remove('hidden'); };
+          if (q && q.id) { open(); return; }
+          const set = (id: string) => { p.logisticRequests[i] = { id, min: ITEMS[id]?.stack || 50, max: Infinity }; open(); };
+          if (p.cursor) set(p.cursor.id); else (ui as any).pickItem?.(set);
+        },
+        onRight: () => { p.logisticRequests[i] = null as any; editor.classList.add('hidden'); },
+        tooltip: () => { const q = p.logisticRequests[i]; return q?.id ? `<div class="tt-title">${ITEMS[q.id]?.name || q.id}</div><div class="tt-body">Min ${q.min} · Max ${q.max === Infinity || q.max === undefined ? '∞' : q.max}</div>` : '<div class="tt-title">Set logistic request</div><div class="tt-body">Robots deliver requested items when you are in a logistic network.</div>'; },
+      });
+      this.logiSlots.push(s);
+    }
+    h('div', 'mini-label', box, 'Trash (robots take it to storage)');
+    const tg2 = h('div', 'grid', box); tg2.style.gridTemplateColumns = 'repeat(10, var(--slot))';
+    for (let i = 0; i < p.trash.size; i++) this.trashSlots.push(ui.invSlot(tg2, () => p.trash, i, () => ({ insert: (st: Stack) => p.main.insertStack(st) })));
+  }
+  refreshLogistics() {
+    const ui = this.ui, p = ui.g.player;
+    for (let i = 0; i < this.logiSlots.length; i++) { const q = p.logisticRequests[i]; ui.setSlot(this.logiSlots[i], null, q?.id || null, q?.id ? String(q.min) : ''); }
+    for (const s of this.trashSlots) (s as any)._bind();
   }
   buildRecipes() {
     const ui = this.ui, g = ui.g, p = g.player;
@@ -139,6 +184,7 @@ export class CharacterWindow extends Win {
   update() {
     this.inv.update();
     for (const s of this.equipSlots) (s as any)._bind();
+    this.refreshLogistics();
     if (++this.t % 10 === 0) {
       this.refreshCounts();
       const p = this.ui.g.player;

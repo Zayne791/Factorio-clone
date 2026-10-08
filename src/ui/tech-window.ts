@@ -66,7 +66,8 @@ export class TechWindow extends Win {
   }
   firstAvailable(): string {
     const res = this.ui.g.research;
-    return Object.keys(TECHS).find(id => res.isAvailable(id) && !res.isTrigger(id)) || Object.keys(TECHS)[0];
+    const avail = Object.keys(TECHS).filter(id => res.isAvailable(id)).sort((a, b) => TECHS[a].order - TECHS[b].order);
+    return avail.find(id => !res.isTrigger(id)) || avail[0] || Object.keys(TECHS)[0];
   }
   buildTree() {
     const L = layout();
