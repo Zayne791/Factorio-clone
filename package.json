@@ -1,0 +1,15 @@
+{
+  "name": "factory-clone",
+  "version": "1.0.0",
+  "private": true,
+  "description": "A browser-based factory automation game inspired by Factorio. Runs offline as a PWA.",
+  "scripts": {
+    "build": "node tools/build.mjs",
+    "dev": "node tools/build.mjs --serve",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "esbuild": "0.24.0",
+    "typescript": "5.6.3"
+  }
+}

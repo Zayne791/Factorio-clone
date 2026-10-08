@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Factory">
+<meta name="theme-color" content="#1a1917">
+<meta name="description" content="A factory automation game: mine, craft, automate, research and launch a rocket. Runs offline in your browser.">
+<title>Factory</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" href="icons/icon-64.png">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<canvas id="game"></canvas>
+<div id="ui"></div>
+<div id="menu" class="hidden"></div>
+<div id="loading">
+  <div class="logo">FACTORY<small>BUILD · AUTOMATE · DEFEND · LAUNCH</small></div>
+  <div class="progress"><div id="load-bar" style="width:0%"></div></div>
+  <div id="load-msg" class="label">Loading...</div>
+</div>
+<script>
+  if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+    window.addEventListener('load', function () { navigator.serviceWorker.register('sw.js').catch(function () {}); });
+  }
+  if (location.search.indexOf('autostart') >= 0) window.__autostart = { seed: 12345 };
+</script>
+<script src="game.js" defer></script>
+</body>
+</html>
